@@ -24,8 +24,8 @@
 
 String mensagem = "UTFPR";
 
-volatile bool flagEnvio = false;  // Adicionado volatile para variáveis usadas em ISR
-volatile bool flagRecepcao = false;
+bool flagEnvio = false;  
+bool flagRecepcao = false;
 
 ComunicacaoSerial comunicacao(PIN_SEND, PIN_RECEIVE, 9600);
 
