@@ -3,19 +3,32 @@
 
 #include <Arduino.h>
 
+#define OCUPADO 0xFF
+#define LIVRE 0x00
+
 class ComunicacaoSerial {
   private:
-    HardwareSerial &portaTx;     // Porta usada para enviar
-    HardwareSerial &portaRx;     // Porta usada para receber
+    int pin_send;     // Porta usada para enviar
+    int pin_receive;     // Porta usada para receber
+    unsigned long bit_delay; // Delay entre bits para simular baud rate
     String bufferRecepcao;       // Buffer para armazenar o que chega
+    byte info_recebido;
+    bool flagEnvio;  // Flag para controle de envio
+    int estado_recebimento;
+    
+    void enviarBit(bool bit);
+    void enviarByte(byte dado);
+    byte receberBit();
+    byte receberByte();
 
   public:
-    ComunicacaoSerial(HardwareSerial &tx, HardwareSerial &rx);
-    void iniciar(long baudRate);
-    void transmitirMsg(const String &mensagem);
+    ComunicacaoSerial(int send_pin, int receive_pin, unsigned long baud_rate = 9600);
+    void iniciar();
+    bool transmitirMsg(byte *mensagem, int tam);
     void receberDados();
-    void processarTransmissao();
     void processarRecepcao();
+    byte recebe(void);
+    void setFlagEnvio(bool flag) { flagEnvio = flag; }  // Método para controlar flag
 };
 
 #endif
