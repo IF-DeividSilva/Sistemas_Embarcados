@@ -1,134 +1,64 @@
 #include "ComunicacaoSerial.h"
 
-ComunicacaoSerial::ComunicacaoSerial(int send_pin, int receive_pin, unsigned long baud_rate) 
-    : pin_send(send_pin), pin_receive(receive_pin), bit_delay(1000000/baud_rate) {
-    flagEnvio = false;
-    estado_recebimento = 1;
-    info_recebido = 0;
+// Construtor
+ComunicacaoSerial::ComunicacaoSerial(HardwareSerial &tx, HardwareSerial &rx)
+  : portaTx(tx), portaRx(rx) {
+  bufferRecepcao = "";
+  mensagemAtual = "UTFPR"; // Define uma mensagem inicial
+  novaMensagemRecebida = false;
 }
 
-void ComunicacaoSerial::iniciar() {
-    pinMode(pin_send, OUTPUT);
-    pinMode(pin_receive, INPUT);
-    digitalWrite(pin_send, HIGH); // Linha ociosa em nível alto
+// Inicia a comunicação
+void ComunicacaoSerial::iniciar(long baudRate) {
+  portaTx.begin(baudRate);
+  portaRx.begin(baudRate);
 }
 
+// Método Auxiliar: Atualiza a mensagem que será enviada
+void ComunicacaoSerial::setMensagemParaEnvio(const String &novaMensagem) {
+  mensagemAtual = novaMensagem;
+}
 
-void ComunicacaoSerial::enviarByte(byte dado) {
-    // bit de start
-    digitalWrite(pin_send, LOW);
-    delayMicroseconds(bit_delay);
+// ---- (b) ENVIAR INFORMAÇÃO ----
+// Apenas envia a string pela porta serial.
+void ComunicacaoSerial::enviarInformacao(const String &mensagem) {
+  portaTx.println(mensagem);
+}
 
-    // bits de dados (8 bits)
-    for (int i = 0; i < 8; i++) {
-        digitalWrite(pin_send, (dado & 1) ? HIGH : LOW);
-        delayMicroseconds(bit_delay);
-        dado >>= 1;
+// ---- (c) PROCESSAR A TRANSMISSÃO ----
+// Este método é chamado pela interrupção do Timer1.
+// A sua responsabilidade é decidir O QUE e QUANDO enviar.
+void ComunicacaoSerial::processarTransmissao() {
+  // A lógica de "processamento" aqui é simplesmente enviar a mensagem atual.
+  enviarInformacao(mensagemAtual);
+}
+
+// ---- (a) RECEBER INFORMAÇÃO ----
+// Este método é chamado pela interrupção do Timer3.
+// A sua única responsabilidade é ler os bytes e sinalizar que uma mensagem chegou.
+// Deve ser o mais rápido possível.
+void ComunicacaoSerial::receberInformacao() {
+  while (portaRx.available()) {
+    char c = portaRx.read();
+    bufferRecepcao += c;
+    if (c == '\n') {
+      novaMensagemRecebida = true;
+      break;
     }
-
-    // bit de stop
-    digitalWrite(pin_send, HIGH);
-    delayMicroseconds(bit_delay);
+  }
 }
 
-byte ComunicacaoSerial::receberByte() {
-    byte dado = 0;
-    
-    // Espera pelo bit de start (nível baixo)
-    while(digitalRead(pin_receive) == HIGH);
-    delayMicroseconds(bit_delay/2); // Vai para o meio do bit de start
-    
-    // Lê 8 bits de dados
-    for (int i = 0; i < 8; i++) {
-        delayMicroseconds(bit_delay);
-        dado >>= 1;
-        if (digitalRead(pin_receive)) {
-            dado |= 0x80;
-        }
-    }
-    
-    // Espera pelo bit de stop
-    delayMicroseconds(bit_delay);
-    return dado;
-}
-
-bool ComunicacaoSerial::transmitirMsg(byte *mensagem, int tam) {
-    setFlagEnvio(true);
-    if (!flagEnvio) {
-        Serial.println("Transmissão ocupada!");
-        return false;
-    }
-    
-    Serial.println("Iniciando transmissão...");
-    enviarByte(0x02);  // STX
-    
-    for (int i = 0; i < tam; i++) {
-        Serial.print("Enviando caractere ASCII: ");
-        Serial.print((char)mensagem[i]);  // Mostra o caractere
-        Serial.print(" (");
-        Serial.print(mensagem[i]);        // Mostra o valor decimal
-        Serial.println(")");
-        enviarByte(mensagem[i]);
-    }
-    
-    enviarByte(0x03);  // ETX
-    Serial.println("Mensagem enviada com sucesso!");
-    
-    flagEnvio = false;
-    return true;
-}
-
-void ComunicacaoSerial::receberDados() {
-    static int count_bits = 0;
-    
-    if (digitalRead(pin_receive) == LOW) {
-        byte c = receberByte();
-        
-        switch(estado_recebimento) {
-            case 1:  // Aguardando STX
-                if (c == 0x02) {
-                    estado_recebimento = 2;
-                    bufferRecepcao = "";
-                }
-                break;
-                
-            case 2:  // Recebendo dados
-                if (c == 0x03) {  // ETX
-                    estado_recebimento = 3;
-                    processarRecepcao();
-                } else {
-                    bufferRecepcao += (char)c;
-                }
-                break;
-                
-            case 3:  // Processamento
-                estado_recebimento = 1;
-                break;
-        }
-    }
-}
-
-byte ComunicacaoSerial::recebe(void) {
-    if (estado_recebimento == 3) {
-        byte temp = info_recebido;
-        estado_recebimento = 1;
-        return temp;
-    }
-    return OCUPADO;
-}
-
+// ---- (d) PROCESSAR A RECEPÇÃO ----
+// Este método é chamado pelo loop() principal.
+// Ele verifica a flag e, se uma mensagem chegou, a processa (neste caso, imprime).
 void ComunicacaoSerial::processarRecepcao() {
-    Serial.print("Recebido: ");
-    for(unsigned int i = 0; i < bufferRecepcao.length(); i++) {
-        Serial.print((char)bufferRecepcao[i]);  // Mostra o caractere
-        Serial.print(" (ASCII: ");
-        Serial.print((byte)bufferRecepcao[i]);  // Mostra o valor ASCII
-        Serial.print(") ");
-    }
-    Serial.println();
-}
+  if (novaMensagemRecebida) {
+    // Processamento: Imprimir no monitor serial principal
+    Serial.print(F("<<< Mensagem recebida via Serial2: "));
+    Serial.print(bufferRecepcao); // bufferRecepcao já tem o '\n'
 
-void ComunicacaoSerial::enviarBit(bool bit) {
-    digitalWrite(pin_send, bit ? HIGH : LOW);
-    delayMicroseconds(bit_delay);
+    // Limpeza para a próxima mensagem
+    bufferRecepcao = "";
+    novaMensagemRecebida = false;
+  }
 }

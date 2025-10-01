@@ -3,32 +3,32 @@
 
 #include <Arduino.h>
 
-#define OCUPADO 0xFF
-#define LIVRE 0x00
-
 class ComunicacaoSerial {
-  private:
-    int pin_send;     // Porta usada para enviar
-    int pin_receive;     // Porta usada para receber
-    unsigned long bit_delay; // Delay entre bits para simular baud rate
-    String bufferRecepcao;       // Buffer para armazenar o que chega
-    byte info_recebido;
-    bool flagEnvio;  // Flag para controle de envio
-    int estado_recebimento;
-    
-    void enviarBit(bool bit);
-    void enviarByte(byte dado);
-    byte receberBit();
-    byte receberByte();
+private:
+  HardwareSerial &portaTx;
+  HardwareSerial &portaRx;
+  String bufferRecepcao;
+  String mensagemAtual; // Armazena a mensagem a ser enviada
+  volatile bool novaMensagemRecebida;
 
-  public:
-    ComunicacaoSerial(int send_pin, int receive_pin, unsigned long baud_rate = 9600);
-    void iniciar();
-    bool transmitirMsg(byte *mensagem, int tam);
-    void receberDados();
-    void processarRecepcao();
-    byte recebe(void);
-    void setFlagEnvio(bool flag) { flagEnvio = flag; }  // Método para controlar flag
+public:
+  ComunicacaoSerial(HardwareSerial &tx, HardwareSerial &rx);
+  void iniciar(long baudRate);
+
+  // (b) Método para enviar informação
+  void enviarInformacao(const String &mensagem);
+
+  // (c) Método para processar a transmissão (chamado pelo Timer)
+  void processarTransmissao();
+
+  // (a) Método para receber informação (chamado pelo Timer)
+  void receberInformacao();
+
+  // (d) Método para processar a recepção (chamado pelo loop)
+  void processarRecepcao();
+  
+  // Método auxiliar para atualizar a mensagem a ser enviada
+  void setMensagemParaEnvio(const String &novaMensagem);
 };
 
 #endif
