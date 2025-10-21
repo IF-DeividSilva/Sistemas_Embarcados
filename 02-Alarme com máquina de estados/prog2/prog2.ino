@@ -198,6 +198,10 @@ void maquinaDeEstados() {
         if (alarmMin > 59) alarmMin = 0;
         if (alarmMin < 0) alarmMin = 59;
       }
+      // AÇÃO: Volta para ajuste horas do alarme
+      if (joyX == -1){
+        estadoAtual = SET_ALARM_HOURS;
+      }
       // TRANSIÇÃO: Avança para segundos do alarme
       if (botaoPressionado()) {
         estadoAtual = SET_ALARM_SECONDS;
@@ -210,6 +214,10 @@ void maquinaDeEstados() {
         alarmSec = alarmSec + joyY;
         if (alarmSec > 59) alarmSec = 0;
         if (alarmSec < 0) alarmSec = 59;
+      }
+      // AÇÃO: Volta para ajuste minutos do alarme
+      if (joyX == -1){
+        estadoAtual = SET_ALARM_MINUTES;
       }
       // TRANSIÇÃO: Finaliza o ajuste e volta para IDLE
       if (botaoPressionado()) {
