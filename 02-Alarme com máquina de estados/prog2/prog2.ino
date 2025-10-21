@@ -152,6 +152,7 @@ void maquinaDeEstados() {
         if (min > 59) min = 0;
         if (min < 0) min = 59;
       }
+      // TRANSIÇÃO: Se o botão for pressionado, avança para horas
       if (joyX == -1){
         estadoAtual = SET_HOURS;
       }
@@ -168,7 +169,7 @@ void maquinaDeEstados() {
         if (sec > 59) sec = 0;
         if (sec < 0) sec = 59;
       }
-
+      // TRANSIÇÃO: Se o botão for pressionado, avança para minutos
       if (joyX == -1){
         estadoAtual = SET_MINUTES;
       }
