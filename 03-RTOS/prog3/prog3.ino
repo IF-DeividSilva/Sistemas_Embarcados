@@ -46,7 +46,7 @@ bool alarmeAtivado = true;
 bool alarmeDisparado = false;
 
 // Enum para a fila do Buzzer
-enum BuzzerCommand { BUZZER_START, BUZZER_STOP };
+//enum BuzzerCommand { BUZZER_START, BUZZER_STOP };
 
 // ==========================================================
 // HANDLES DO FREERTOS (Variáveis de controle)
@@ -479,27 +479,36 @@ void vTaskAlarmCheck(void *pvParameters) {
 }
 
 // ==========================================================
-// TAREFA: vTaskBuzzerControl (Controla o Buzzer)
+// TAREFA: vTaskBuzzerControl (Atualizada)
 // ==========================================================
 void vTaskBuzzerControl(void *pvParameters) {
   BuzzerCommand cmd;
+  bool tocando = false; 
+  int songToPlay = 0;
+
   for (;;) {
-    if (xQueueReceive(xBuzzerQueue, &cmd, portMAX_DELAY) == pdTRUE) {
+    TickType_t tempoEspera = tocando ? 0 : portMAX_DELAY;
+
+    if (xQueueReceive(xBuzzerQueue, &cmd, tempoEspera) == pdTRUE) {
       if (cmd == BUZZER_START) {
-        
-        // --- VERIFICA QUAL MÚSICA TOCAR ---
-        int songToPlay;
+        tocando = true;
         if (xSemaphoreTake(xAlarmeMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-          songToPlay = alarme.songId; // Pega o ID da música do alarme
+          songToPlay = alarme.songId;
           xSemaphoreGive(xAlarmeMutex);
         }
-        
-        // --- CHAMA TOCAR() COM O ID ---
-        sirene.tocar(songToPlay); 
-
       } else if (cmd == BUZZER_STOP) {
+        tocando = false;
         sirene.parar();
       }
+    }
+
+    if (tocando) {
+      // AGORA PASSAMOS A FILA PARA DENTRO DO METODO TOCAR
+      sirene.tocar(songToPlay, xBuzzerQueue);
+      
+      // Nota: Como o tocar() agora aborta sozinho quando vê o STOP na fila,
+      // ele vai retornar imediatamente. O loop reinicia, o xQueueReceive lá em cima
+      // vai pegar o STOP oficialmente da fila, setar tocando = false, e tudo para.
     }
   }
 }
