@@ -11,9 +11,9 @@ const int RS = 12, EN = 11, D4 = 5, D5 = 4, D6 = 3, D7 = 2;
 LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
 
 const int pinoJoyX = A0;
-const int pinoJoyY = A1; // NOVO: Eixo Y necessário para o Snake
+const int pinoJoyY = A1; 
 const int pinoBotao = A2;
-
+const int pinoBuzzer = 48;
 
 // -----------------------------------------------------------
 // Estruturas de Dados
@@ -26,6 +26,8 @@ struct Ponto {
   int y;
 };
 
+Ponto corpo[40]; 
+byte vramSnake[32][8];
 
 // ==========================================================
 // HANDLES DO FREERTOS (Variáveis de controle)
@@ -35,10 +37,11 @@ SemaphoreHandle_t mutexLCD;
 TaskHandle_t handleMenu;   
 TaskHandle_t handleSnake;   
 TaskHandle_t handleDino;
-TaskHandle_t handleWordle; 
+TaskHandle_t handleForca; 
+TaskHandle_t handleMusica;
 
 // ==========================================================
-// BITMAPS e Banco de Palavras
+// BITMAPS , Banco de Palavras e notas das musicas
 // ==========================================================
 
 // --- Desenhos (Bitmaps para Dino) ---
@@ -55,6 +58,18 @@ byte blocoCheio[8]  = { B11111, B11111, B11111, B11111, B11111, B11111, B11111, 
 // --- Banco de Palavras (5 letras) ---
 const int qtdPalavras = 5; 
 const char* lista5Letras[] = {"NATAL", "FOGAO", "TIGRE", "LIVRO", "VASCO", "FURTO", "MAGIA", "CASCA"};
+
+// --- Melodia do Dino ---
+// Notas em Hz: E4, G4, A4, B4 (Escala pentatônica simples)
+int melodiaDino[] = { 
+  330, 392, 440, 494, 440, 392, 330, 330, 
+  392, 440, 494, 523, 494, 440, 392, 330 
+};
+int duracoes[] = { 
+  150, 150, 150, 150, 150, 150, 300, 150,
+  150, 150, 150, 150, 150, 150, 150, 300 
+};
+int qtdNotas = 16;
 
 
 // ==========================================================
@@ -75,6 +90,7 @@ void setup() {
   Serial.begin(9600);
   lcd.begin(16, 2);
   pinMode(pinoBotao, INPUT_PULLUP);
+  pinMode(pinoBuzzer, OUTPUT);
 
   // Criação dos recursos do RTOS
   filaComandos = xQueueCreate(10, sizeof(int));
@@ -85,12 +101,14 @@ void setup() {
   xTaskCreate(TaskMenu,     "Menu",     200, NULL, 1, &handleMenu);
   xTaskCreate(TaskSnake,    "Snake",    800, NULL, 1, &handleSnake);
   xTaskCreate(TaskDino,     "Dino",     400, NULL, 1, &handleDino); 
-  xTaskCreate(TaskForca,   "Forca",   500, NULL, 1, &handleWordle);
+  xTaskCreate(TaskForca,   "Forca",   500, NULL, 1, &handleForca);
+  xTaskCreate(TaskMusica, "Musica", 200, NULL, 1, &handleMusica);
 
   // Starta com todos os games suspenso (pausad), pois o sistema inicia no Menu
   vTaskSuspend(handleSnake); 
   vTaskSuspend(handleDino);
-  vTaskSuspend(handleWordle);
+  vTaskSuspend(handleForca);
+  vTaskSuspend(handleMusica);
 
   lcd.createChar(3, blocoCima);
   lcd.createChar(4, blocoBaixo);
@@ -146,14 +164,25 @@ void TaskMenu(void *pvParameters) {
   for (;;) {
     if (xQueueReceive(filaComandos, &cmd, portMAX_DELAY) == pdPASS) {
       
+      bool mudou = false; // Flag para saber se precisa tocar o som
+
       // Navegação
       if (cmd == DIREITA) {
         opcao++;
         if (opcao > 2) opcao = 2;
+        else mudou = true; // Só toca se realmente mudou 
+        if (opcao == 2) mudou = true; // Força som no limite
       }
       if (cmd == ESQUERDA) {
         opcao--;
         if (opcao < 0) opcao = 0;
+        else mudou = true;
+        if (opcao == 0) mudou = true;
+      }
+
+      // Toca o som de navegação se moveu o cursor
+      if (mudou || cmd == DIREITA || cmd == ESQUERDA) {
+         somMenuNavegar();
       }
 
       // Renderização do Menu
@@ -161,11 +190,15 @@ void TaskMenu(void *pvParameters) {
       lcd.setCursor(0, 0);
       if (opcao == 0)      lcd.print(">Snake   Dino   ");
       else if (opcao == 1) lcd.print(" Snake  >Dino   ");
-      else if (opcao == 2) lcd.print(" Dino   >Wordle ");
+      else if (opcao == 2) lcd.print(" Dino   >Forca ");
       xSemaphoreGive(mutexLCD);
 
       // Seleção
       if (cmd == SELECIONAR) {
+        
+        // Toca som de confirmação
+        somMenuSelecionar();
+
         xSemaphoreTake(mutexLCD, portMAX_DELAY);
         lcd.clear();
         lcd.print("Iniciando...");
@@ -178,7 +211,7 @@ void TaskMenu(void *pvParameters) {
         // Troca de Contexto
         if (opcao == 0)      vTaskResume(handleSnake);
         else if (opcao == 1) vTaskResume(handleDino);
-        else if (opcao == 2) vTaskResume(handleWordle);
+        else if (opcao == 2) vTaskResume(handleForca);
         
         vTaskSuspend(NULL); // Suspende o Menu
 
@@ -192,20 +225,17 @@ void TaskMenu(void *pvParameters) {
     }
   }
 }
-
 // -----------------------------------------------------------
 // TASK SNAKE: 
 // -----------------------------------------------------------
 void TaskSnake(void *pvParameters) {
-  Ponto corpo[40]; 
   Ponto comida;
   int tamanho = 3;
   // Direção em PIXELS
   int dirX = 1, dirY = 0; 
   int cmd;
 
-  // Buffer de Video Virtual: 32 blocos (16 colunas * 2 linhas), 8 linhas por bloco
-  byte vram[32][8]; 
+
 
   for (;;) {
     // --- 1. Reset (Posição em Pixels: X=0..79, Y=0..15) ---
@@ -251,15 +281,15 @@ void TaskSnake(void *pvParameters) {
 
       // --- 6. Renderização no display ---
       
-      //  Limpa a VRAM (Zera tudo)
-      memset(vram, 0, sizeof(vram));
+      //  Limpa a vramSnake (Zera tudo)
+      memset(vramSnake, 0, sizeof(vramSnake));
 
       //  Desenha a Comida
-      desenharPixel(comida.x, comida.y, vram);
+      desenharPixel(comida.x, comida.y, vramSnake);
 
       //  Desenha a Snake
       for(int i=0; i<tamanho; i++) {
-        desenharPixel(corpo[i].x, corpo[i].y, vram);
+        desenharPixel(corpo[i].x, corpo[i].y, vramSnake);
       }
 
       //  Envia para o LCD (Gerenciamento Dinâmico de Slots)
@@ -274,13 +304,13 @@ void TaskSnake(void *pvParameters) {
         
         // Verifica se tem algum pixel aceso neste bloco 5x8
         for (int row = 0; row < 8; row++) {
-          if (vram[bloco][row] > 0) blocoVazio = false;
+          if (vramSnake[bloco][row] > 0) blocoVazio = false;
         }
 
         if (!blocoVazio) {
           // Se o bloco tem desenho e ainda temos slots (Max 8)
           if (slotsUsados < 8) {
-            lcd.createChar(slotsUsados, vram[bloco]); // Cria o char dinâmico
+            lcd.createChar(slotsUsados, vramSnake[bloco]); // Cria o char dinâmico
             
             // Calcula posição no LCD
             int lcdCol = bloco % 16;
@@ -312,6 +342,7 @@ void TaskSnake(void *pvParameters) {
     lcd.print("GAME OVER");
     lcd.setCursor(0,1);
     lcd.print("Pts: "); lcd.print(tamanho-3);
+    somDerrota();
     xSemaphoreGive(mutexLCD);
     
     vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -322,9 +353,9 @@ void TaskSnake(void *pvParameters) {
   }
 }
 
-// --- Função Auxiliar para plotar pixel na VRAM ---
+// --- Função Auxiliar para plotar pixel na vramSnake ---
 // Converte coordenada global (80x16) para Bloco+Bit Local
-void desenharPixel(int x, int y, byte vram[32][8]) {
+void desenharPixel(int x, int y, byte vramSnake[32][8]) {
   // Proteção de limites
   if (x < 0 || x >= 80 || y < 0 || y >= 16) return;
 
@@ -338,109 +369,78 @@ void desenharPixel(int x, int y, byte vram[32][8]) {
   // O LCD desenha bits da esquerda para direita:
   // Bit 4 é o mais à esquerda, Bit 0 o mais à direita
   // (1 << (4 - pixelX)) acende o bit correto
-  vram[indiceBloco][pixelY] |= (1 << (4 - pixelX));
+  vramSnake[indiceBloco][pixelY] |= (1 << (4 - pixelX));
 }
 
 // -----------------------------------------------------------
 // TASK DINO RUNNER:
 // -----------------------------------------------------------
 void TaskDino(void *pvParameters) {
-  int dinoY = 1;         // 0 = Cima, 1 = Baixo
-  int obstaculoX = 15;   // Posição X do inimigo
-  int obstaculoY = 1;    // 0 = Ave (Cima), 1 = Cacto (Baixo)
-  int score = 0;
-  int cmd;
-  float velocidade = 400; // Começa mais lento
+  // ... (variáveis iguais as de antes: dinoY, cactoX, etc) ...
+  int dinoY = 1; int cactoX = 15; int score = 0; int framesPulo = 0; 
+  int cmd; bool noAr = false;
 
   for (;;) {
     
-    // --- 1. RECARREGAR SPRITES ---
-    // Carrega os desenhos necessários para este jogo
+    // 1. Recarregar Sprites (Igual fizemos antes)
     xSemaphoreTake(mutexLCD, portMAX_DELAY);
-    lcd.createChar(0, dinoParado); // Char 0: Dino
-    lcd.createChar(1, ave);        // Char 1: Ave (triangulin)
-    lcd.createChar(2, cacto);      // Char 2: Cacto
+    lcd.createChar(0, dinoParado);
+    lcd.createChar(1, dinoPulo);
+    lcd.createChar(2, cacto);
     lcd.clear(); 
     xSemaphoreGive(mutexLCD);
 
-    // --- 2. Reset do Jogo ---
-    dinoY = 1;        // Começa no chão
-    obstaculoX = 15;  // Inimigo longe
-    obstaculoY = 1;   // Primeiro inimigo é um cacto
-    score = 0;
-    velocidade = 300;
+    // --- 2. START DO JOGO ---
+    dinoY = 1; cactoX = 15; score = 0; framesPulo = 0; noAr = false;
+    float velocidade = 250; 
+
+    // >>> LIGA A MÚSICA AQUI <<<
+    vTaskResume(handleMusica); 
 
     bool jogando = true;
-    
     while(jogando) {
+      // ... (TODA A LÓGICA DE INPUT, PULO, COLISÃO IGUALZINHO ANTES) ...
+      // ... (Copie o miolo do while que você já tem funcionando) ...
       
-      // --- INPUT (Controle de Faixa) ---
+      // Input...
       if (xQueueReceive(filaComandos, &cmd, 0) == pdPASS) {
-        if (cmd == CIMA) {
-           dinoY = 0; // Vai para o bloco de cima
-        }
-        else if (cmd == BAIXO) {
-           dinoY = 1; // Vai para o bloco de baixo
+        if ((cmd == CIMA || cmd == SELECIONAR) && !noAr) {
+           noAr = true; dinoY = 0; framesPulo = 0;
+           // OBS: Se você tinha tone() de pulo aqui, REMOVA. 
+           // O Arduino não toca duas coisas ao mesmo tempo.
         }
       }
-
-      // --- MOVIMENTO DO INIMIGO ---
-      obstaculoX--;
       
-      // Se o inimigo saiu da tela (passou pelo dino)
-      if (obstaculoX < 0) {
-        obstaculoX = 15; // Volta para o final
-        score++;         // Ponto
-        
-        // Sorteia o próximo inimigo:
-        // random(0, 100) > 50 ? Cima : Baixo
-        if (random(0, 100) > 50) {
-           obstaculoY = 0; // Ave (Cima)
-        } else {
-           obstaculoY = 1; // Cacto (Baixo)
-        }
+      // Física... Movimento... Colisão...
+      if (noAr) { framesPulo++; if (framesPulo > 3) { dinoY = 1; noAr = false; } }
+      cactoX--; if (cactoX < 0) { cactoX = 15; score++; if(velocidade > 100) velocidade -= 5; }
+      if (cactoX == 1 && dinoY == 1) jogando = false;
 
-        // Aumenta dificuldade
-        if(velocidade > 80) velocidade -= 10; 
-      }
-
-      // --- COLISÃO ---
-      // Se estiverem na mesma coluna (1) E na mesma linha (Y)
-      if (obstaculoX == 1 && dinoY == obstaculoY) {
-        jogando = false;
-      }
-
-      // --- DESENHO ---
+      // Renderização...
       xSemaphoreTake(mutexLCD, portMAX_DELAY);
       lcd.clear();
-      
-      // 1. Desenha Dino
-      lcd.setCursor(1, dinoY);
-      lcd.write((uint8_t)0); 
-      
-      // 2. Desenha Inimigo
-      lcd.setCursor(obstaculoX, obstaculoY);
-      if (obstaculoY == 0) {
-        lcd.write((uint8_t)1); // Desenha Ave
-      } else {
-        lcd.write((uint8_t)2); // Desenha Cacto
-      }
-      
-      // 3. Placar
-      lcd.setCursor(10, 0);
-      lcd.print(score);
-      
+      lcd.setCursor(1, dinoY); lcd.write((uint8_t)(noAr ? 1 : 0)); 
+      lcd.setCursor(cactoX, 1); lcd.write((uint8_t)2);
+      lcd.setCursor(10, 0); lcd.print(score);
       xSemaphoreGive(mutexLCD);
 
       vTaskDelay((int)velocidade / portTICK_PERIOD_MS);
     }
 
     // --- GAME OVER ---
+    
+    // >>> DESLIGA A MÚSICA AQUI <<<
+    vTaskSuspend(handleMusica); 
+    noTone(pinoBuzzer); // Garante que o buzzer para de gritar imediatamente
+    
+    // Som de derrota (Opcional, toca depois que a musica para)
+    // tone(pinoBuzzer, 200, 500); 
+
     xSemaphoreTake(mutexLCD, portMAX_DELAY);
     lcd.clear();
     lcd.print("GAME OVER");
     lcd.setCursor(0,1);
-    lcd.print("Pts: "); lcd.print(score);
+    lcd.print("Score: "); lcd.print(score);
     xSemaphoreGive(mutexLCD);
     
     vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -533,8 +533,7 @@ void TaskForca(void *pvParameters) {
 
           if (!acertou && !jaTinha) {
             vidas--; // Errou
-            // Feedback sonoro de erro aqui (tone...)
-            // TODO
+            somDerrota();
           }
         }
       }
@@ -565,10 +564,12 @@ void TaskForca(void *pvParameters) {
       lcd.print("YOU WIN! :)");
       lcd.setCursor(0,1);
       lcd.print(palavraAlvo);
+      somVitoria();
     } else {
       lcd.print("GAME OVER:(");
       lcd.setCursor(0,1);
       lcd.print("Era: "); lcd.print(palavraAlvo);
+      somDerrota();
     }
     xSemaphoreGive(mutexLCD);
 
@@ -579,4 +580,68 @@ void TaskForca(void *pvParameters) {
     vTaskResume(handleMenu);
     vTaskSuspend(NULL);
   }
+}
+// --- Função Auxiliar de Som ---
+void somVitoria() {
+  // Notas: Do, Mi, Sol, Do(Agudo)
+  int melodia[] = {262, 330, 392, 523};
+  int duracao[] = {150, 150, 150, 600};
+
+  for (int i = 0; i < 4; i++) {
+    tone(pinoBuzzer, melodia[i]);
+    // Usa vTaskDelay para não travar o RTOS enquanto toca
+    vTaskDelay(duracao[i] / portTICK_PERIOD_MS);
+    noTone(pinoBuzzer); // Para o som
+    vTaskDelay(50 / portTICK_PERIOD_MS); // Pequena pausa entre notas
+  }
+}
+
+void somDerrota() {
+  // Notas: Sol, Mi, Do (Descendo)
+  int melodia[] = {392, 330, 262}; 
+  int duracao[] = {200, 200, 500};
+
+  for (int i = 0; i < 3; i++) {
+    tone(pinoBuzzer, melodia[i]);
+    vTaskDelay(duracao[i] / portTICK_PERIOD_MS);
+    noTone(pinoBuzzer);
+  }
+}
+
+
+// -----------------------------------------------------------
+// TASK MUSICA 
+// -----------------------------------------------------------
+void TaskMusica(void *pvParameters) {
+  for (;;) {
+    for (int i = 0; i < qtdNotas; i++) {
+      // Toca a nota
+      tone(pinoBuzzer, melodiaDino[i]);
+
+      // Calcula o tempo que a nota fica soando
+      // O Delay libera o processador para o Jogo do Dino rodar
+      vTaskDelay(duracoes[i] / portTICK_PERIOD_MS);
+      
+      // Pequena pausa entre notas para dar efeito de "staccato"
+      noTone(pinoBuzzer);
+      vTaskDelay(20 / portTICK_PERIOD_MS);
+    }
+    // Quando acaba o loop for, ele volta pro começo automaticamente (loop infinito)
+  }
+}
+
+// --- Sons do Menu ---
+void somMenuNavegar() {
+  // Um "Bip" curto e agudo (1000Hz por 30ms)
+  tone(pinoBuzzer, 1000, 30);
+  // Não precisa de delay aqui, pois o som é muito curto
+}
+
+void somMenuSelecionar() {
+  // Som estilo "Moeda" ou "Start" (subindo o tom)
+  tone(pinoBuzzer, 1000);
+  vTaskDelay(100 / portTICK_PERIOD_MS);
+  tone(pinoBuzzer, 1500);
+  vTaskDelay(100 / portTICK_PERIOD_MS);
+  noTone(pinoBuzzer);
 }
