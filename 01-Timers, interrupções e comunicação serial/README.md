@@ -43,7 +43,7 @@ Este projeto implementa um sistema de comunicação serial que utiliza timers e 
 - Configuração de taxa de transmissão (baud rate)
 - Ajuste dos intervalos dos timers
 
-## 🔧 Hardware Necessário
+##  Hardware Necessário
 
 ### Componentes
 - **Arduino Mega 2560** (ou compatível com múltiplas portas seriais)
@@ -64,7 +64,7 @@ Dispositivo (TX) ──> Arduino 1 (RX2)
 GND ───────────────> GND
 ```
 
-## 🏗️ Arquitetura do Sistema
+##  Arquitetura do Sistema
 
 ### Diagrama de Fluxo
 
