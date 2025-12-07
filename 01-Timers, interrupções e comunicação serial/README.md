@@ -2,7 +2,7 @@
 
 Sistema de comunicação serial assíncrona para Arduino Mega usando timers e interrupções para transmissão e recepção periódica de mensagens.
 
-## 📋 Índice
+## Índice
 
 - [Descrição](#descrição)
 - [Funcionalidades](#funcionalidades)
@@ -15,7 +15,7 @@ Sistema de comunicação serial assíncrona para Arduino Mega usando timers e in
 - [Configurações](#configurações)
 - [Troubleshooting](#troubleshooting)
 
-## 🎯 Descrição
+##  Descrição
 
 Este projeto implementa um sistema de comunicação serial que utiliza timers e interrupções para gerenciar a transmissão e recepção de dados de forma autônoma e periódica. O sistema é ideal para aplicações que necessitam de comunicação constante entre dispositivos sem bloquear o loop principal do programa.
 
@@ -26,7 +26,7 @@ Este projeto implementa um sistema de comunicação serial que utiliza timers e 
 - **Arquitetura Orientada a Objetos**: Código organizado e reutilizável
 - **Separação de Responsabilidades**: Lógica de comunicação isolada do código principal
 
-## ⚙️ Funcionalidades
+## Funcionalidades
 
 ### 1. Transmissão Automática
 - Envio de mensagens em intervalos regulares configuráveis
@@ -100,7 +100,7 @@ GND ───────────────> GND
 - `processarRecepcao()`: Processa mensagens completas recebidas
 - Leitura de comandos do usuário
 
-## 📦 Instalação
+##  Instalação
 
 ### Pré-requisitos
 
@@ -121,7 +121,7 @@ GND ───────────────> GND
 5. Selecione a porta COM correta
 6. Faça o upload do código
 
-## 🚀 Como Usar
+##  Como Usar
 
 ### Teste Básico (Loopback)
 
@@ -151,7 +151,7 @@ Saída esperada:
 3. Configure o mesmo baud rate (padrão: 9600)
 4. O Arduino enviará mensagens automaticamente e exibirá o que receber
 
-## 📁 Estrutura de Arquivos
+## Estrutura de Arquivos
 
 ```
 01-Timers, interrupções e comunicação serial/
@@ -183,7 +183,7 @@ Classe que encapsula toda a lógica de comunicação:
   - `processarRecepcao()`: Processa mensagens no loop
   - `setMensagemParaEnvio(msg)`: Atualiza a mensagem
 
-## 🔬 Detalhes Técnicos
+##  Detalhes Técnicos
 
 ### Timers Utilizados
 
@@ -260,7 +260,7 @@ Para habilitar mensagens de debug:
 #define _TIMERINTERRUPT_LOGLEVEL_     4
 ```
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Problema: Mensagens não são recebidas
 
@@ -294,14 +294,14 @@ Para habilitar mensagens de debug:
 - Aumente o tamanho do buffer se mensagens forem muito longas
 - Verifique se não há conflitos de interrupção
 
-## 📝 Notas Importantes
+## Notas Importantes
 
 1. **ISRs devem ser rápidas**: Métodos chamados por interrupção devem executar em poucos microssegundos
 2. **Variáveis compartilhadas**: Use `volatile` para variáveis acessadas tanto por ISRs quanto pelo loop
 3. **Serial dentro de ISR**: Evite usar `Serial.print()` dentro de rotinas de interrupção
 4. **Sincronização**: O sistema usa flags para sincronizar ISRs com o loop principal
 
-## 🎓 Conceitos Demonstrados
+##  Conceitos Demonstrados
 
 - ✅ Programação de timers em microcontroladores
 - ✅ Uso de interrupções (ISR - Interrupt Service Routine)
@@ -311,13 +311,13 @@ Para habilitar mensagens de debug:
 - ✅ Sincronização entre ISRs e loop principal
 - ✅ Buffer de recepção e processamento de mensagens
 
-## 📚 Referências
+##  Referências
 
 - [Arduino Mega 2560 Documentation](https://docs.arduino.cc/hardware/mega-2560)
 - [TimerInterrupt Library](https://github.com/khoih-prog/TimerInterrupt)
 - [Arduino Serial Reference](https://www.arduino.cc/reference/en/language/functions/communication/serial/)
 
-## 📄 Licença
+##  Licença
 
 Projeto desenvolvido para fins educacionais - UTFPR
 
