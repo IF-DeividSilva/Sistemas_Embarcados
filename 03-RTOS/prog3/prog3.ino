@@ -124,7 +124,7 @@ void TimerHandler() {
   // "Dá" o semáforo para desbloquear a vTaskClockTick
   xSemaphoreGiveFromISR(xClockTickSemaphore, &xHigherPriorityTaskWoken);
   
-  // Se uma tarefa de prioridade maior foi acordada, trocamos de contexto IMEDIATAMENTE.
+  // Se uma tarefa de prioridade maior foi acordada, troca de contexto.
   if (xHigherPriorityTaskWoken == pdTRUE) {
     portYIELD_FROM_ISR();
   }
@@ -445,8 +445,6 @@ void vTaskAlarmCheck(void *pvParameters) {
     }
 
     // 2. A LÓGICA DE VERIFICAÇÃO (do seu 'case IDLE')
-    //    Agora roda o tempo todo!
-    
     // Se o alarme está ativado, não está disparado, e bateu a hora...
     if (alarmeAtivado && !alarmeDisparado &&
         localRelogio.hora == localAlarme.hora &&
@@ -473,7 +471,7 @@ void vTaskAlarmCheck(void *pvParameters) {
       alarmeDisparado = false;
     }
 
-    // 3. "Dorme" por 500ms. Não precisa checar mais rápido que isso.
+    // 3. "Dorme" por 500ms.
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
