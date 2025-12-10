@@ -376,7 +376,7 @@ void desenharPixel(int x, int y, byte vramSnake[32][8]) {
 // TASK DINO RUNNER:
 // -----------------------------------------------------------
 void TaskDino(void *pvParameters) {
-  // ... (variáveis iguais as de antes: dinoY, cactoX, etc) ...
+  // ... dinoY, cactoX, etc) ...
   int dinoY = 1; int cactoX = 15; int score = 0; int framesPulo = 0; 
   int cmd; bool noAr = false;
 
@@ -429,7 +429,7 @@ void TaskDino(void *pvParameters) {
     vTaskSuspend(handleMusica); 
     noTone(pinoBuzzer); // Garante que o buzzer para de gritar imediatamente
     
-    // Som de derrota (Opcional, toca depois que a musica para)
+    // Som de derrota
     // tone(pinoBuzzer, 200, 500); 
 
     xSemaphoreTake(mutexLCD, portMAX_DELAY);
